@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Trash2, Plus } from 'lucide-react'
 
 // Dữ liệu từ bảng shop
 const shopData = [
@@ -42,11 +43,17 @@ const initialChannelData = [
   { channelId: 17, minGold: 1500000000, maxGold: -1, bets: 200000000, lossRate: 15, maxLossMoney: 3000000000 }
 ]
 
+interface GameResult {
+  money: string
+  gold: string
+  gameResults: { channelId: number; games: number }[]
+}
+
 export default function GameCalculator() {
   const [customMoney, setCustomMoney] = useState("")
   const [customGold, setCustomGold] = useState("")
   const [channelData, setChannelData] = useState(initialChannelData)
-  const [results, setResults] = useState<string[]>([])
+  const [results, setResults] = useState<GameResult[]>([])
   const [showDetails, setShowDetails] = useState(false)
   const [detailSteps, setDetailSteps] = useState<string[]>([])
 
@@ -157,12 +164,15 @@ const calculateDetailedGames = (initialGold: number) => {
 
   // Tính toán kết quả cho tất cả mốc tiền trong shop
   const calculateAllResults = () => {
-    const newResults: string[] = []
+    const newResults: GameResult[] = []
     
     shopData.forEach(item => {
       const games = calculateGames(item.itemNum)
-      const gameText = games.map(g => `${g.games} ván kênh ${g.channelId}`).join(', ')
-      newResults.push(`${item.money.toLocaleString()} money ==> ${item.itemNum.toLocaleString()} gold: ${gameText || 'không chơi được ván nào'}`)
+      newResults.push({
+        money: item.money.toLocaleString(),
+        gold: item.itemNum.toLocaleString(),
+        gameResults: games
+      })
     })
     
     setResults(newResults)
@@ -179,9 +189,11 @@ const calculateDetailedGames = (initialGold: number) => {
   
   if (gold > 0) {
     const { gameResults, steps } = calculateDetailedGames(gold)
-    const gameText = gameResults.map(g => `${g.games} ván kênh ${g.channelId}`).join(', ')
-    const result = `${gold.toLocaleString()} gold: ${gameText || 'không chơi được ván nào'}`
-    setResults([result])
+    setResults([{
+      money: customMoney || '',
+      gold: gold.toLocaleString(),
+      gameResults: gameResults
+    }])
     setDetailSteps(steps)
   }
 }
@@ -208,6 +220,33 @@ const updateChannelData = (index: number, field: string, value: string) => {
   }
   
   setChannelData(newData)
+}
+
+// Thêm kênh mới
+const addChannel = () => {
+  const maxChannelId = Math.max(...channelData.map(c => c.channelId))
+  const newChannel = {
+    channelId: maxChannelId + 1,
+    minGold: 1000000,
+    maxGold: -1,
+    bets: 100000,
+    lossRate: 15,
+    maxLossMoney: 1500000
+  }
+  setChannelData([...channelData, newChannel])
+}
+
+// Xóa kênh
+const deleteChannel = (index: number) => {
+  const newData = channelData.filter((_, i) => i !== index)
+  setChannelData(newData)
+}
+
+// Tạo header động cho bảng kết quả
+const maxChannels = Math.max(...results.map(r => r.gameResults.length), 0)
+const resultHeaders = []
+for (let i = 0; i < maxChannels; i++) {
+  resultHeaders.push(`Ván ${i + 1}`, `Kênh ${i + 1}`)
 }
 
   return (
@@ -277,32 +316,38 @@ const updateChannelData = (index: number, field: string, value: string) => {
                     <CardTitle>Kết quả</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Money</TableHead>
-                          <TableHead>Gold</TableHead>
-                          <TableHead>Kết quả chơi</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {results.map((result, index) => {
-                          const parts = result.split(' ==> ')
-                          const moneyPart = parts[0]
-                          const goldAndResult = parts[1].split(' gold: ')
-                          const goldPart = goldAndResult[0]
-                          const gamePart = goldAndResult[1]
-                          
-                          return (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Money</TableHead>
+                            <TableHead>Gold</TableHead>
+                            {resultHeaders.map((header, index) => (
+                              <TableHead key={index}>{header}</TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {results.map((result, index) => (
                             <TableRow key={index}>
-                              <TableCell className="font-medium">{moneyPart}</TableCell>
-                              <TableCell>{goldPart}</TableCell>
-                              <TableCell>{gamePart}</TableCell>
+                              <TableCell className="font-medium">{result.money}</TableCell>
+                              <TableCell>{result.gold}</TableCell>
+                              {Array.from({ length: maxChannels }, (_, i) => {
+                                const gameResult = result.gameResults[i]
+                                return [
+                                  <TableCell key={`games-${i}`}>
+                                    {gameResult ? gameResult.games : ''}
+                                  </TableCell>,
+                                  <TableCell key={`channel-${i}`}>
+                                    {gameResult ? gameResult.channelId : ''}
+                                  </TableCell>
+                                ]
+                              }).flat()}
                             </TableRow>
-                          )
-                        })}
-                      </TableBody>
-                    </Table>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                     
                     {showDetails && detailSteps.length > 0 && (
                       <div className="mt-4">
@@ -357,6 +402,13 @@ const updateChannelData = (index: number, field: string, value: string) => {
               <CardDescription>Chỉnh sửa thông tin các kênh chơi</CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="mb-4">
+                <Button onClick={addChannel} className="flex items-center gap-2">
+                  <Plus size={16} />
+                  Thêm kênh mới
+                </Button>
+              </div>
+              
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -367,12 +419,20 @@ const updateChannelData = (index: number, field: string, value: string) => {
                       <TableHead>Bets</TableHead>
                       <TableHead>Loss Rate</TableHead>
                       <TableHead>Max Loss Money</TableHead>
+                      <TableHead>Hành động</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {channelData.map((channel, index) => (
                       <TableRow key={channel.channelId}>
-                        <TableCell>{channel.channelId}</TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            value={channel.channelId}
+                            onChange={(e) => updateChannelData(index, 'channelId', e.target.value)}
+                            className="w-20"
+                          />
+                        </TableCell>
                         <TableCell>
                           <Input
                             type="number"
@@ -409,6 +469,17 @@ const updateChannelData = (index: number, field: string, value: string) => {
                           <div className="w-32 p-2 bg-gray-100 rounded text-center">
                             {channel.maxLossMoney.toLocaleString()}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            onClick={() => deleteChannel(index)}
+                            variant="destructive"
+                            size="sm"
+                            className="flex items-center gap-1"
+                          >
+                            <Trash2 size={14} />
+                            Xóa
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
